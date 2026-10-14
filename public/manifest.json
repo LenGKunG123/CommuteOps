@@ -1,0 +1,11 @@
+{
+  "name": "CommuteOps",
+  "short_name": "CommuteOps",
+  "description": "เปรียบเทียบทางเลือกการเดินทางในกรุงเทพฯ",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f5f7f3",
+  "theme_color": "#102c27",
+  "lang": "th",
+  "icons": []
+}
