@@ -1,13 +1,15 @@
 // src/lib/routing/catalog.ts
+// แหล่งข้อมูลเดียวของโปรไฟล์และเส้นทาง + validator + ตัวแปลง template เป็น RouteOption
 import {
-  COMMON_FARE_LEGS, EMPTY_FARE_SETTINGS, WIN_LEG_ID, BTS_SOURCE_URL,
+  BTS_SOURCE_URL, COMMON_FARE_LEGS, EMPTY_FARE_SETTINGS, WIN_LEG_ID,
   costOfLegs, fareText,
-  type FareLegId, type FareLegMap, type FareSettings,
+  type FareLegDef, type FareLegId, type FareLegMap, type FareSettings,
 } from "./fares";
-import { DEFAULT_TRAFFIC_TUNING, type TrafficTuning } from "./traffic";
+import { DEFAULT_TRAFFIC_TUNING, type TrafficTuning, type TrafficWindow } from "./traffic";
 import type { RouteOption, RouteStep } from "./types";
 
 export const MIN_WAIT_SAMPLES = 3;
+
 export type CommuteType = "morning" | "evening";
 
 export type Place = { lat: number; lon: number; name: string };
@@ -16,8 +18,8 @@ export type Leg = {
   text: string;        // ใช้ {origin} / {destination} แทนชื่อสถานที่ได้
   mode: "WALK" | "TRANSIT";
   minutes: number;     // เวลาฐาน ก่อนคูณตัวคูณจราจร
-  traffic?: boolean;   // วิ่งบนถนน → คูณตัวคูณจราจร (รถไฟฟ้าไม่คูณ)
-  wait?: boolean;      // ขานี้คือรอรถ → แทนด้วยสถิติจริงได้เมื่อ log พอ
+  traffic?: boolean;   // วิ่งบนถนน → คูณตัวคูณจราจร (รถไฟฟ้าไม่ติ๊ก)
+  wait?: boolean;      // ขานี้คือรอรถ → แทนด้วยสถิติจริงเมื่อ log พอ
   line?: string;
   unverified?: boolean;
 };
@@ -39,7 +41,7 @@ export type CommuteLegDef = {
   origin: Place;
   destination: Place;
   defaultArriveBy: string;   // "HH:MM"
-  waitWindow: string;        // ข้อความช่วงเวลารอรถปกติ
+  waitWindow: string;
   routes: RouteTemplate[];
 };
 
@@ -51,7 +53,7 @@ export type CommuteProfile = {
   departBufferMinutes: number;
   fareLegs: FareLegMap;
   trafficTuning: TrafficTuning;
-  winStep?: Leg;             // ขาวินช่วงท้าย เติมอัตโนมัติเมื่อเปิดวินของแผนนั้น
+  winStep?: Leg;
   morning: CommuteLegDef;
   evening: CommuteLegDef;
 };
@@ -72,11 +74,11 @@ const PROFILE_ME: CommuteProfile = {
   departBufferMinutes: 10,
   trafficTuning: DEFAULT_TRAFFIC_TUNING,
   fareLegs: {
-    bus21e: COMMON_FARE_LEGS.bus21e,
-    bus141: COMMON_FARE_LEGS.bus141,
-    feeder: COMMON_FARE_LEGS.feeder,
-    access: COMMON_FARE_LEGS.access,
-    win: COMMON_FARE_LEGS.win,
+    bus21e: COMMON_FARE_LEGS.bus21e as FareLegDef,
+    bus141: COMMON_FARE_LEGS.bus141 as FareLegDef,
+    feeder: COMMON_FARE_LEGS.feeder as FareLegDef,
+    access: COMMON_FARE_LEGS.access as FareLegDef,
+    win: COMMON_FARE_LEGS.win as FareLegDef,
     bts: {
       short: "BTS",
       label: "BTS ศาลาแดง → สะพานตากสิน/วงเวียนใหญ่",
@@ -102,7 +104,11 @@ const PROFILE_ME: CommuteProfile = {
         transfers: 0,
         fareLegs: ["bus21e"],
         defaultWin: false,
-        delayed: { waitMinutes: 32, tag: "รอนาน", description: "21E รอนานเกิน 25 นาที แนะนำสลับไปออก กม.9 ต่อ 141 แทน" },
+        delayed: {
+          waitMinutes: 32,
+          tag: "รอนาน",
+          description: "21E รอนานเกิน 25 นาที แนะนำสลับไปออก กม.9 ต่อ 141 แทน",
+        },
         legs: [
           { text: "เดินไปป้ายหน้า {origin}", mode: "WALK", minutes: 5 },
           { text: "รอสาย 21E", mode: "WALK", minutes: 12, wait: true },
@@ -161,7 +167,11 @@ const PROFILE_ME: CommuteProfile = {
         transfers: 0,
         fareLegs: ["bus21e"],
         defaultWin: true,
-        delayed: { waitMinutes: 38, tag: "ไม่แนะนำ (รอนาน)", description: "21E รอนานมาก แนะนำขึ้น BTS หรือสาย 141 แทน" },
+        delayed: {
+          waitMinutes: 38,
+          tag: "ไม่แนะนำ (รอนาน)",
+          description: "21E รอนานมาก แนะนำขึ้น BTS หรือสาย 141 แทน",
+        },
         legs: [
           { text: "เดินไปป้ายหน้า {origin}", mode: "WALK", minutes: 5 },
           { text: "รอสาย 21E", mode: "WALK", minutes: 18, wait: true },
@@ -177,7 +187,11 @@ const PROFILE_ME: CommuteProfile = {
         transfers: 0,
         fareLegs: ["access", "bus21e"],
         defaultWin: true,
-        delayed: { waitMinutes: 38, tag: "ไม่แนะนำ (รอนาน)", description: "21E รอนานมาก แนะนำขึ้น BTS หรือสาย 141 แทน" },
+        delayed: {
+          waitMinutes: 38,
+          tag: "ไม่แนะนำ (รอนาน)",
+          description: "21E รอนานมาก แนะนำขึ้น BTS หรือสาย 141 แทน",
+        },
         legs: [
           { text: "ไปจามจุรีสแควร์ หรือป้ายอู่จุฬาฯ จาก {origin}", mode: "WALK", minutes: 12, unverified: true },
           { text: "รอสาย 21E", mode: "WALK", minutes: 18, wait: true },
@@ -206,7 +220,10 @@ const PROFILE_ME: CommuteProfile = {
 
 // ================= โปรไฟล์ตั้งต้น: เพื่อน =================
 // TODO: ยืนยันพิกัดจาก Google Maps (ตอนนี้เป็นค่าประมาณ ใช้ดึงข้อมูลฝนเท่านั้น)
-const RAJPRACHA_PRIMARY: Place = { lat: 13.6594, lon: 100.5069, name: "รร.ราชประชาสมาสัย ฝ่ายประถม · พิกัดประมาณ" };
+const RAJPRACHA_PRIMARY: Place = {
+  lat: 13.6594, lon: 100.5069,
+  name: "รร.ราชประชาสมาสัย ฝ่ายประถม · พิกัดประมาณ",
+};
 const CHIT_LOM: Place = { lat: 13.7442, lon: 100.5433, name: "BTS ชิดลม (ราชประสงค์)" };
 
 const PROFILE_FRIEND: CommuteProfile = {
@@ -217,10 +234,10 @@ const PROFILE_FRIEND: CommuteProfile = {
   departBufferMinutes: 10,
   trafficTuning: DEFAULT_TRAFFIC_TUNING,
   fareLegs: {
-    bus21e: COMMON_FARE_LEGS.bus21e,
-    bus141: COMMON_FARE_LEGS.bus141,
-    busPlain: COMMON_FARE_LEGS.busPlain,
-    win: COMMON_FARE_LEGS.win,
+    bus21e: COMMON_FARE_LEGS.bus21e as FareLegDef,
+    bus141: COMMON_FARE_LEGS.bus141 as FareLegDef,
+    busPlain: COMMON_FARE_LEGS.busPlain as FareLegDef,
+    win: COMMON_FARE_LEGS.win as FareLegDef,
     bts: {
       short: "BTS",
       label: "BTS → ชิดลม (เปลี่ยนสายที่สยาม)",
@@ -241,8 +258,7 @@ const PROFILE_FRIEND: CommuteProfile = {
         id: "friend-21e-saladaeng-chitlom",
         title: "21E/141 ลงศาลาแดง + BTS สยาม → ชิดลม",
         mode: "รถเมล์ทางด่วน + BTS",
-        description:
-          "สมมติฐานที่คุ้มเช็กที่สุด เพราะโรงเรียนอยู่บนถนนสุขสวัสดิ์ corridor เดียวกับ 21E/141 ต้องยืนยันก่อนว่ารถจอดป้ายหน้าโรงเรียนจริง",
+        description: "สมมติฐานที่คุ้มเช็กที่สุด เพราะโรงเรียนอยู่บนถนนสุขสวัสดิ์ corridor เดียวกับ 21E/141 ต้องยืนยันก่อนว่ารถจอดป้ายหน้าโรงเรียนจริง",
         tag: "ต้องยืนยันก่อนใช้",
         transfers: 1,
         fareLegs: ["bus21e", "bts"],
@@ -259,8 +275,7 @@ const PROFILE_FRIEND: CommuteProfile = {
         id: "friend-bus-silomline-chitlom",
         title: "รถเมล์สุขสวัสดิ์ → BTS สายสีลม → สยาม → ชิดลม",
         mode: "รถเมล์ + BTS",
-        description:
-          "โครงสร้างนี้ถึงชิดลมได้แน่นอนไม่ว่าขึ้น BTS ที่สถานีไหนบนสายสีลม ที่ยังไม่รู้คือเลขสายรถเมล์ที่จอดหน้าโรงเรียน เปิด ViaBus ปักหมุดที่ป้ายแล้วเติมลงในโปรไฟล์",
+        description: "โครงสร้างนี้ถึงชิดลมได้แน่นอนไม่ว่าขึ้น BTS ที่สถานีไหนบนสายสีลม ที่ยังไม่รู้คือเลขสายรถเมล์ที่จอดหน้าโรงเรียน ใช้ปุ่มค้นป้ายในหน้าแก้โปรไฟล์ช่วยได้",
         tag: "รอเติมเลขสาย",
         transfers: 1,
         fareLegs: ["busPlain", "bts"],
@@ -304,7 +319,7 @@ const PROFILE_FRIEND: CommuteProfile = {
 export const BUILTIN_PROFILES: CommuteProfile[] = [PROFILE_ME, PROFILE_FRIEND];
 export const DEFAULT_PROFILE_ID = "me";
 
-// ================= แผนสำหรับหน้าค่าใช้จ่าย (derive จากโปรไฟล์ ไม่มีลิสต์ซ้ำ) =================
+// ================= แผนสำหรับหน้าค่าใช้จ่าย (derive จากโปรไฟล์) =================
 export type PlanDef = {
   id: string;
   title: string;
@@ -314,7 +329,7 @@ export type PlanDef = {
 };
 
 export function plansOf(profile: CommuteProfile): PlanDef[] {
-  const map = (type: CommuteType) =>
+  const map = (type: CommuteType): PlanDef[] =>
     legOf(profile, type).routes.map((r) => ({
       id: r.id,
       title: `${type === "morning" ? "เช้า" : "เย็น"} · ${r.title}`,
@@ -325,7 +340,11 @@ export function plansOf(profile: CommuteProfile): PlanDef[] {
   return [...map("morning"), ...map("evening")];
 }
 
-export function planFareLegs(planId: string, profile: CommuteProfile, settings: FareSettings): FareLegId[] {
+export function planFareLegs(
+  planId: string,
+  profile: CommuteProfile,
+  settings: FareSettings
+): FareLegId[] {
   const plan = plansOf(profile).find((p) => p.id === planId);
   if (!plan) return [];
   const win = settings.winPlans[planId] ?? plan.defaultWin;
@@ -339,29 +358,41 @@ export function planCost(planId: string, profile: CommuteProfile, settings: Fare
 export function defaultFareSettingsFor(profile: CommuteProfile): FareSettings {
   const m = profile.morning.routes[0]?.id ?? "";
   const e = profile.evening.routes[0]?.id ?? "";
-  return { ...EMPTY_FARE_SETTINGS, morningPlan: m, eveningPlan: e, altEveningPlan: profile.evening.routes[1]?.id ?? e };
+  return {
+    ...EMPTY_FARE_SETTINGS,
+    morningPlan: m,
+    eveningPlan: e,
+    altEveningPlan: profile.evening.routes[1]?.id ?? e,
+  };
 }
 
 // กันกรณีผู้ใช้แก้โปรไฟล์แล้ว planId ที่เลือกไว้หายไป
-export function normalizeFareSettings(profile: CommuteProfile, raw: Partial<FareSettings> | null): FareSettings {
+export function normalizeFareSettings(
+  profile: CommuteProfile,
+  raw: Partial<FareSettings> | null
+): FareSettings {
   const base = defaultFareSettingsFor(profile);
   if (!raw) return base;
+
   const plans = plansOf(profile);
-  const pick = (id: unknown, type: CommuteType, fallback: string) =>
+  const pick = (id: unknown, type: CommuteType, fallback: string): string =>
     typeof id === "string" && plans.some((p) => p.id === id && p.commuteType === type) ? id : fallback;
-  const clampInt = (v: unknown, max: number) => {
+  const clampInt = (v: unknown, max: number): number => {
     const n = Number(v);
     return Number.isFinite(n) ? Math.min(Math.max(Math.round(n), 0), max) : 0;
   };
+
   const fares: Record<FareLegId, number> = {};
   for (const [k, v] of Object.entries(raw.fares ?? {})) {
     const n = Number(v);
     if (profile.fareLegs[k] && Number.isFinite(n) && n >= 0 && n <= 10000) fares[k] = n;
   }
+
   const winPlans: Record<string, boolean> = {};
   for (const [k, v] of Object.entries(raw.winPlans ?? {})) {
     if (plans.some((p) => p.id === k)) winPlans[k] = Boolean(v);
   }
+
   return {
     fares,
     winPlans,
@@ -386,7 +417,7 @@ export type BuildContext = {
 };
 
 export function buildRouteOption(t: RouteTemplate, ctx: BuildContext): RouteOption {
-  const fill = (s: string) =>
+  const fill = (s: string): string =>
     s.replace(/\{origin\}/g, ctx.originName).replace(/\{destination\}/g, ctx.destinationName);
 
   const winOn = ctx.fareSettings.winPlans[t.id] ?? t.defaultWin;
@@ -404,6 +435,7 @@ export function buildRouteOption(t: RouteTemplate, ctx: BuildContext): RouteOpti
     if (historyUsable && o) return Math.round(o.avgWait);
     return fallback;
   };
+
   const effective = (l: Leg): number =>
     l.wait ? resolveWait(l.minutes) : l.traffic ? Math.round(l.minutes * ctx.multiplier) : l.minutes;
 
@@ -416,7 +448,9 @@ export function buildRouteOption(t: RouteTemplate, ctx: BuildContext): RouteOpti
 
   const duration = legs.reduce((sum, l) => sum + effective(l), 0);
   const waitLeg = legs.find((l) => l.wait);
-  const walk = legs.filter((l) => l.mode === "WALK" && !l.wait).reduce((sum, l) => sum + effective(l), 0);
+  const walk = legs
+    .filter((l) => l.mode === "WALK" && !l.wait)
+    .reduce((sum, l) => sum + effective(l), 0);
   const unverified = legs.some((l) => l.unverified);
 
   const notes: string[] = [];
@@ -439,21 +473,24 @@ export function buildRouteOption(t: RouteTemplate, ctx: BuildContext): RouteOpti
     walk,
     cost: fareText(fareLegIds, ctx.profile.fareLegs, ctx.fareSettings),
     description: notes.length ? `${base} · ${notes.join(" · ")}` : base,
-    tag: delayedActive && t.delayed ? t.delayed.tag : t.tag,
+    ...(delayedActive && t.delayed ? { tag: t.delayed.tag } : t.tag ? { tag: t.tag } : {}),
     isLive: false,
     unverified,
     steps,
   };
 }
 
-// ================= validator สำหรับ JSON ที่ import เข้ามา =================
-type Fail = { ok: false; errors: string[] };
-type Pass = { ok: true; profile: CommuteProfile };
+// ================= validator =================
+type ValidateFail = { ok: false; errors: string[] };
+type ValidatePass = { ok: true; profile: CommuteProfile };
 
-export function validateProfile(raw: unknown): Pass | Fail {
+export function validateProfile(raw: unknown): ValidatePass | ValidateFail {
+  if (typeof raw !== "object" || raw == null) {
+    return { ok: false, errors: ["ไม่ใช่ JSON object"] };
+  }
+
   const errors: string[] = [];
   const o = raw as Record<string, unknown>;
-  if (typeof raw !== "object" || raw == null) return { ok: false, errors: ["ไม่ใช่ JSON object"] };
 
   const str = (v: unknown, field: string, max = 200): string => {
     if (typeof v !== "string" || v.trim() === "" || v.length > max) {
@@ -462,6 +499,7 @@ export function validateProfile(raw: unknown): Pass | Fail {
     }
     return v;
   };
+
   const num = (v: unknown, field: string, min: number, max: number, fallback: number): number => {
     const n = Number(v);
     if (!Number.isFinite(n) || n < min || n > max) {
@@ -470,6 +508,7 @@ export function validateProfile(raw: unknown): Pass | Fail {
     }
     return n;
   };
+
   const place = (v: unknown, field: string): Place => {
     const p = (v ?? {}) as Record<string, unknown>;
     return {
@@ -478,25 +517,29 @@ export function validateProfile(raw: unknown): Pass | Fail {
       name: str(p.name, `${field}.name`),
     };
   };
-  const legs = (v: unknown, field: string): Leg[] => {
-    if (!Array.isArray(v) || v.length === 0 || v.length > 20) {
-      errors.push(`${field} ต้องเป็น array 1–20 รายการ`);
+
+  const parseLegs = (v: unknown, field: string): Leg[] => {
+    if (!Array.isArray(v) || v.length === 0 || v.length > 25) {
+      errors.push(`${field} ต้องเป็นรายการ 1–25 ขั้นตอน`);
       return [];
     }
     return v.map((x, i) => {
       const l = (x ?? {}) as Record<string, unknown>;
       return {
         text: str(l.text, `${field}[${i}].text`, 300),
-        mode: l.mode === "TRANSIT" ? "TRANSIT" : "WALK",
+        mode: l.mode === "TRANSIT" ? ("TRANSIT" as const) : ("WALK" as const),
         minutes: num(l.minutes, `${field}[${i}].minutes`, 0, 600, 0),
         traffic: Boolean(l.traffic),
         wait: Boolean(l.wait),
         unverified: Boolean(l.unverified),
-        ...(typeof l.line === "string" && l.line.length <= 100 ? { line: l.line } : {}),
+        ...(typeof l.line === "string" && l.line.length <= 100 && l.line.trim() !== ""
+          ? { line: l.line }
+          : {}),
       };
     });
   };
 
+  // ---- fareLegs ----
   const fareLegs: FareLegMap = {};
   const rawLegs = (o.fareLegs ?? {}) as Record<string, unknown>;
   for (const [id, v] of Object.entries(rawLegs).slice(0, 30)) {
@@ -505,36 +548,48 @@ export function validateProfile(raw: unknown): Pass | Fail {
     fareLegs[id] = {
       label: str(f.label, `fareLegs.${id}.label`),
       short: str(f.short, `fareLegs.${id}.short`, 40),
-      defaultBaht: b == null ? null : num(b, `fareLegs.${id}.defaultBaht`, 0, 10000, 0),
+      defaultBaht: b == null || b === "" ? null : num(b, `fareLegs.${id}.defaultBaht`, 0, 10000, 0),
       badge: f.badge === "official" || f.badge === "user" ? f.badge : "unset",
       source: typeof f.source === "string" ? f.source.slice(0, 500) : "ไม่ระบุแหล่งที่มา",
-      ...(typeof f.sourceUrl === "string" && /^https:\/\//.test(f.sourceUrl) ? { sourceUrl: f.sourceUrl } : {}),
-      ...(f.monthlyPass ? { monthlyPass: true } : {}),
+      ...(typeof f.sourceUrl === "string" && /^https:\/\//.test(f.sourceUrl)
+        ? { sourceUrl: f.sourceUrl }
+        : {}),
+      ...(f.monthlyPass ? { monthlyPass: true as const } : {}),
     };
   }
-  if (Object.keys(fareLegs).length === 0) errors.push("fareLegs ว่าง");
+  if (Object.keys(fareLegs).length === 0) errors.push("fareLegs ว่าง ต้องมีอย่างน้อย 1 ประเภท");
 
+  // ---- commute leg ----
   const commuteLeg = (v: unknown, field: string): CommuteLegDef => {
     const c = (v ?? {}) as Record<string, unknown>;
     const routesRaw = c.routes;
     if (!Array.isArray(routesRaw) || routesRaw.length === 0 || routesRaw.length > 20) {
-      errors.push(`${field}.routes ต้องเป็น array 1–20 รายการ`);
+      errors.push(`${field}.routes ต้องมี 1–20 เส้นทาง`);
     }
+
     const routes: RouteTemplate[] = (Array.isArray(routesRaw) ? routesRaw : []).map((x, i) => {
       const r = (x ?? {}) as Record<string, unknown>;
-      const ids = Array.isArray(r.fareLegs) ? r.fareLegs.filter((f): f is string => typeof f === "string") : [];
-      for (const id of ids) if (!fareLegs[id]) errors.push(`${field}.routes[${i}] อ้าง fareLeg "${id}" ที่ไม่มีใน fareLegs`);
+      const ids = Array.isArray(r.fareLegs)
+        ? r.fareLegs.filter((f): f is string => typeof f === "string")
+        : [];
+      for (const id of ids) {
+        if (!fareLegs[id]) {
+          errors.push(`${field}.routes[${i}] อ้างค่าโดยสาร "${id}" ที่ไม่มีอยู่`);
+        }
+      }
       const d = (r.delayed ?? null) as Record<string, unknown> | null;
       return {
         id: str(r.id, `${field}.routes[${i}].id`, 80),
         title: str(r.title, `${field}.routes[${i}].title`),
-        mode: str(r.mode, `${field}.routes[${i}].mode`),
+        mode: typeof r.mode === "string" ? r.mode.slice(0, 200) : "",
         description: typeof r.description === "string" ? r.description.slice(0, 1000) : "",
-        ...(typeof r.tag === "string" && r.tag.length <= 60 ? { tag: r.tag } : {}),
+        ...(typeof r.tag === "string" && r.tag.trim() !== "" && r.tag.length <= 60
+          ? { tag: r.tag }
+          : {}),
         transfers: num(r.transfers, `${field}.routes[${i}].transfers`, 0, 10, 0),
         fareLegs: ids,
         defaultWin: Boolean(r.defaultWin),
-        legs: legs(r.legs, `${field}.routes[${i}].legs`),
+        legs: parseLegs(r.legs, `${field}.routes[${i}].legs`),
         ...(d
           ? {
               delayed: {
@@ -546,19 +601,63 @@ export function validateProfile(raw: unknown): Pass | Fail {
           : {}),
       };
     });
+
     const seen = new Set<string>();
     for (const r of routes) {
-      if (seen.has(r.id)) errors.push(`${field} มี route id ซ้ำ: ${r.id}`);
+      if (r.id && seen.has(r.id)) errors.push(`${field} มีรหัสเส้นทางซ้ำ: ${r.id}`);
       seen.add(r.id);
     }
+
     return {
       origin: place(c.origin, `${field}.origin`),
       destination: place(c.destination, `${field}.destination`),
-      defaultArriveBy: typeof c.defaultArriveBy === "string" && /^\d{2}:\d{2}$/.test(c.defaultArriveBy) ? c.defaultArriveBy : "09:00",
+      defaultArriveBy:
+        typeof c.defaultArriveBy === "string" && /^\d{2}:\d{2}$/.test(c.defaultArriveBy)
+          ? c.defaultArriveBy
+          : "09:00",
       waitWindow: typeof c.waitWindow === "string" ? c.waitWindow.slice(0, 60) : "—",
       routes,
     };
   };
+
+  // ---- trafficTuning (ไม่บังคับ ถ้าไม่ถูกต้องใช้ค่าตั้งต้น) ----
+  let trafficTuning: TrafficTuning = DEFAULT_TRAFFIC_TUNING;
+  const rawTuning = o.trafficTuning as Record<string, unknown> | undefined;
+  if (rawTuning && Array.isArray(rawTuning.windows)) {
+    const windows: TrafficWindow[] = rawTuning.windows.flatMap((x) => {
+      const w = (x ?? {}) as Record<string, unknown>;
+      const from = Number(w.from);
+      const to = Number(w.to);
+      const mult = Number(w.multiplier);
+      if (![from, to, mult].every(Number.isFinite) || mult <= 0 || mult > 5) return [];
+      return [{
+        from, to, multiplier: mult,
+        label: typeof w.label === "string" ? w.label.slice(0, 120) : "ช่วงเวลา",
+      }];
+    });
+    const offPeak = (rawTuning.offPeak ?? {}) as Record<string, unknown>;
+    const offMult = Number(offPeak.multiplier);
+    const weekend = Number(rawTuning.weekendMultiplier);
+    const rain = Number(rawTuning.rainPenalty);
+    if (windows.length > 0) {
+      trafficTuning = {
+        offPeak: {
+          multiplier: Number.isFinite(offMult) && offMult > 0 && offMult <= 5 ? offMult : 1.15,
+          label: typeof offPeak.label === "string" ? offPeak.label.slice(0, 120) : "จราจรคล่องตัว",
+        },
+        windows,
+        weekendMultiplier: Number.isFinite(weekend) && weekend > 0 && weekend <= 5 ? weekend : 1.15,
+        rainPenalty: Number.isFinite(rain) && rain >= 0 && rain <= 2 ? rain : 0.25,
+      };
+    }
+  }
+
+  // ---- winStep ----
+  let winStep: Leg | undefined;
+  if (o.winStep && typeof o.winStep === "object") {
+    const parsed = parseLegs([o.winStep], "winStep");
+    if (parsed[0]) winStep = parsed[0];
+  }
 
   const slo = (o.slo ?? {}) as Record<string, unknown>;
   const profile: CommuteProfile = {
@@ -572,15 +671,20 @@ export function validateProfile(raw: unknown): Pass | Fail {
     },
     departBufferMinutes: num(o.departBufferMinutes ?? 10, "departBufferMinutes", 0, 120, 10),
     fareLegs,
-    trafficTuning: DEFAULT_TRAFFIC_TUNING, // ปรับละเอียดได้ภายหลัง ยังไม่เปิดให้ import ทับ
-    ...(o.winStep ? { winStep: legs([o.winStep], "winStep")[0] } : {}),
+    trafficTuning,
+    ...(winStep ? { winStep } : {}),
     morning: commuteLeg(o.morning, "morning"),
     evening: commuteLeg(o.evening, "evening"),
   };
 
-  return errors.length ? { ok: false, errors: errors.slice(0, 12) } : { ok: true, profile };
+  if (!profile.id) errors.push("id ว่าง");
+
+  return errors.length > 0 ? { ok: false, errors: errors.slice(0, 12) } : { ok: true, profile };
 }
 
 export function cloneProfile(profile: CommuteProfile, newId: string, newLabel: string): CommuteProfile {
-  return JSON.parse(JSON.stringify({ ...profile, id: newId, label: newLabel })) as CommuteProfile;
+  const copy = JSON.parse(JSON.stringify(profile)) as CommuteProfile;
+  copy.id = newId;
+  copy.label = newLabel;
+  return copy;
 }

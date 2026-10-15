@@ -8,7 +8,6 @@ type Props = {
   lat: number;
   lon: number;
   label: string;
-  onPickLine?: (line: string) => void;
 };
 
 const btn: React.CSSProperties = {
@@ -23,15 +22,17 @@ const btn: React.CSSProperties = {
   fontFamily: "var(--font-main)",
 };
 
-export default function StopFinder({ lat, lon, label, onPickLine }: Props) {
+export default function StopFinder({ lat, lon, label }: Props) {
   const [radius, setRadius] = useState(500);
   const [data, setData] = useState<StopsResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   async function search() {
     setLoading(true);
     setError(null);
+    setCopied(null);
     try {
       const res = await fetch("/api/stops", {
         method: "POST",
@@ -39,13 +40,22 @@ export default function StopFinder({ lat, lon, label, onPickLine }: Props) {
         body: JSON.stringify({ lat, lon, radius }),
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json?.error ?? `HTTP ${res.status}`);
+      if (!res.ok) throw new Error(String(json?.error ?? `HTTP ${res.status}`));
       setData(json as StopsResponse);
     } catch (e) {
       setError(e instanceof Error ? e.message : "ค้นหาไม่สำเร็จ");
       setData(null);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function copyRef(ref: string) {
+    try {
+      await navigator.clipboard.writeText(ref);
+      setCopied(`คัดลอก "${ref}" แล้ว เอาไปวางในช่องสายรถได้`);
+    } catch {
+      setCopied(`สายที่เลือก: ${ref} (คัดลอกอัตโนมัติไม่ได้ พิมพ์เองได้เลย)`);
     }
   }
 
@@ -78,6 +88,7 @@ export default function StopFinder({ lat, lon, label, onPickLine }: Props) {
             <option value={300}>300 ม.</option>
             <option value={500}>500 ม.</option>
             <option value={1000}>1 กม.</option>
+            <option value={2000}>2 กม.</option>
           </select>
         </label>
         <button type="button" style={btn} onClick={search} disabled={loading}>
@@ -85,9 +96,8 @@ export default function StopFinder({ lat, lon, label, onPickLine }: Props) {
         </button>
       </div>
 
-      {error && (
-        <p style={{ color: "#f87171", margin: "8px 0 0 0", lineHeight: 1.5 }}>{error}</p>
-      )}
+      {error && <p style={{ color: "#f87171", margin: "8px 0 0 0", lineHeight: 1.5 }}>{error}</p>}
+      {copied && <p style={{ color: "#34d399", margin: "8px 0 0 0", lineHeight: 1.5 }}>{copied}</p>}
 
       {data && (
         <div style={{ marginTop: "10px", lineHeight: 1.6 }}>
@@ -118,13 +128,9 @@ export default function StopFinder({ lat, lon, label, onPickLine }: Props) {
                   <button
                     key={`${r.ref}-${i}`}
                     type="button"
-                    onClick={() => onPickLine?.(r.ref)}
-                    title={`${r.name}${r.from ? ` · ${r.from} → ${r.to ?? "?"}` : ""}`}
-                    style={{
-                      ...btn,
-                      padding: "4px 10px",
-                      cursor: onPickLine ? "pointer" : "default",
-                    }}
+                    onClick={() => copyRef(r.ref)}
+                    title={`${r.name}${r.from ? ` · ${r.from} → ${r.to ?? "?"}` : ""} (คลิกเพื่อคัดลอก)`}
+                    style={{ ...btn, padding: "4px 10px" }}
                   >
                     {r.ref}
                     {r.to ? <span style={{ opacity: 0.7, fontWeight: 400 }}> → {r.to}</span> : null}
@@ -134,9 +140,7 @@ export default function StopFinder({ lat, lon, label, onPickLine }: Props) {
             )}
           </div>
 
-          <p style={{ margin: "10px 0 0 0", color: "#fbbf24", lineHeight: 1.5 }}>
-            ⚠ {data.note}
-          </p>
+          <p style={{ margin: "10px 0 0 0", color: "#fbbf24", lineHeight: 1.5 }}>⚠ {data.note}</p>
         </div>
       )}
     </div>

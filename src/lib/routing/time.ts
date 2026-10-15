@@ -1,6 +1,8 @@
 // src/lib/routing/time.ts
 const BKK_TZ = "Asia/Bangkok";
-const WEEKDAY_INDEX: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+const WEEKDAY_INDEX: Record<string, number> = {
+  Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6,
+};
 
 export type BkkClock = { date: string; hour: number; minute: number; weekday: number };
 
@@ -12,10 +14,12 @@ export function bkkClock(at: Date = new Date()): BkkClock {
     hour: "2-digit", minute: "2-digit", hour12: false,
   }).formatToParts(at);
   const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
-  const wd = new Intl.DateTimeFormat("en-US", { timeZone: BKK_TZ, weekday: "short" }).format(at).slice(0, 3);
+  const wd = new Intl.DateTimeFormat("en-US", { timeZone: BKK_TZ, weekday: "short" })
+    .format(at)
+    .slice(0, 3);
   return {
     date: `${get("year")}-${get("month")}-${get("day")}`,
-    hour: Number(get("hour")) % 24, // en-GB คืน "24" ตอนเที่ยงคืน
+    hour: Number(get("hour")) % 24,   // en-GB คืน "24" ตอนเที่ยงคืน
     minute: Number(get("minute")),
     weekday: WEEKDAY_INDEX[wd] ?? 1,
   };
@@ -33,7 +37,7 @@ export function bkkHourOf(iso: string): number {
 }
 
 export function bkkMonthOf(iso: string): string {
-  return bkkClock(new Date(iso)).date.slice(0, 7); // YYYY-MM
+  return bkkClock(new Date(iso)).date.slice(0, 7);   // YYYY-MM
 }
 
 export function parseHhMm(v: string): number | null {

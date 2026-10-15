@@ -10,11 +10,13 @@ import type {
 } from "@/lib/routing/types";
 import CostPlanner from "@/components/CostPlanner";
 import ProfileManager from "@/components/ProfileManager";
+import SyncPanel from "@/components/SyncPanel";
 import { buildRouteOption, legOf, type CommuteProfile, type CommuteType } from "@/lib/routing/catalog";
 import { calculateTraffic } from "@/lib/routing/traffic";
 import type { FareSettings } from "@/lib/routing/fares";
 import { bkkHourOf, formatHhMm, parseHhMm, percentile } from "@/lib/routing/time";
 import * as store from "@/lib/routing/store";
+import Link from "next/link";
 
 const CROWD_LABELS: Record<CrowdLevel, string> = {
   1: "ว่าง / ได้นั่ง",
@@ -85,7 +87,7 @@ export default function Home() {
   const [finishWait, setFinishWait] = useState("");
   const [finishCrowd, setFinishCrowd] = useState<CrowdLevel | undefined>(undefined);
 
-  // ===== โหลดสภาพอากาศ + ระยะถนน จากเซิร์ฟเวอร์ =====
+  // ===== ดึงอากาศ + จราจรสดจากเซิร์ฟเวอร์ =====
   const fetchConditions = useCallback(async (p: CommuteProfile, type: CommuteType) => {
     const leg = legOf(p, type);
     setLoading(true);
@@ -167,9 +169,16 @@ export default function Home() {
     return () => clearInterval(interval);
   }, [activeTrip]);
 
-  // ===== ตัวคูณจราจร + ประกอบเส้นทาง (ทำฝั่งเบราว์เซอร์ จะแก้โปรไฟล์ได้ทันที) =====
+  // ===== ตัวคูณจราจร + ประกอบเส้นทาง (ทำฝั่งเบราว์เซอร์) =====
   const traffic = useMemo(
-    () => (profile ? calculateTraffic(profile.trafficTuning, conditions?.weather.isRaining ?? false) : null),
+    () =>
+      profile
+        ? calculateTraffic(
+            profile.trafficTuning,
+            conditions?.weather.isRaining ?? false,
+            conditions?.liveTraffic ?? null
+          )
+        : null,
     [profile, conditions]
   );
 
@@ -222,25 +231,24 @@ export default function Home() {
       if (arr) arr.push(l);
       else groups.set(key, [l]);
     }
-    const avg = (nums: number[]) =>
+    const avg = (nums: number[]): number | null =>
       nums.length ? Math.round((nums.reduce((a, b) => a + b, 0) / nums.length) * 10) / 10 : null;
-    return Array.from(groups.values())
-      .flatMap((g) => {
+
+    return Array.from(groups.entries())
+      .flatMap(([key, g]) => {
         const first = g[0];
         if (!first) return [];
-        return [
-          {
-            key: `${first.commuteType}|${first.routeId}`,
-            routeTitle: first.routeTitle,
-            commuteType: first.commuteType,
-            count: g.length,
-            avgActual: avg(g.map((l) => l.actualMinutes)),
-            avgWait: avg(g.flatMap((l) => (l.waitMinutesActual != null ? [l.waitMinutesActual] : []))),
-            waitSamples: g.filter((l) => l.waitMinutesActual != null).length,
-            avgCrowd: avg(g.flatMap((l) => (l.crowdLevel != null ? [l.crowdLevel] : []))),
-            crowdSamples: g.filter((l) => l.crowdLevel != null).length,
-          },
-        ];
+        return [{
+          key,
+          routeTitle: first.routeTitle,
+          commuteType: first.commuteType,
+          count: g.length,
+          avgActual: avg(g.map((l) => l.actualMinutes)),
+          avgWait: avg(g.flatMap((l) => (l.waitMinutesActual != null ? [l.waitMinutesActual] : []))),
+          waitSamples: g.filter((l) => l.waitMinutesActual != null).length,
+          avgCrowd: avg(g.flatMap((l) => (l.crowdLevel != null ? [l.crowdLevel] : []))),
+          crowdSamples: g.filter((l) => l.crowdLevel != null).length,
+        }];
       })
       .sort((a, b) => b.count - a.count);
   }, [logs]);
@@ -294,7 +302,7 @@ export default function Home() {
   }
 
   function toggleSaved(id: string) {
-    setSaved((current) => (current.includes(id) ? current.filter((x) => x !== id) : [...current, id]));
+    setSaved((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]));
   }
 
   function persistLogs(next: CommuteLog[]) {
@@ -348,7 +356,9 @@ export default function Home() {
       actualMinutes,
       estimatedMinutes: trip.estimatedMinutes,
       waitMinutesActual:
-        !skip && Number.isFinite(waitParsed) && waitParsed >= 0 && waitParsed <= 120 ? waitParsed : undefined,
+        !skip && Number.isFinite(waitParsed) && waitParsed >= 0 && waitParsed <= 120
+          ? waitParsed
+          : undefined,
       crowdLevel: skip ? undefined : finishCrowd,
     });
     setPendingFinish(null);
@@ -426,6 +436,7 @@ export default function Home() {
   }
 
   function deleteLog(id: string) {
+    if (profile) store.addTombstone(profile.id, id);
     persistLogs(logs.filter((l) => l.id !== id));
   }
 
@@ -447,7 +458,7 @@ export default function Home() {
     };
   }
 
-  function getRouteTypeClass(title: string, mode: string) {
+  function getRouteTypeClass(title: string, mode: string): string {
     if (title.includes("BTS") || mode.includes("BTS") || mode.includes("รถไฟฟ้า")) return "route-type-bts";
     if (title.includes("21E") || title.includes("141") || title.includes("ต่อเดียว")) return "route-type-bus-direct";
     return "route-type-feeder";
@@ -466,10 +477,10 @@ export default function Home() {
   return (
     <main className="app-shell">
       <header className="topbar">
-        <a className="brand" href="/" aria-label="CommuteOps หน้าหลัก">
+        <Link className="brand" href="/" aria-label="CommuteOps หน้าหลัก">
           <span className="brand-mark">C</span>
           <span>Commute<span className="brand-light">Ops</span></span>
-        </a>
+        </Link>
         <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
           <select
             value={profile.id}
@@ -515,7 +526,9 @@ export default function Home() {
             <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "#34d399" }}>
               ● ACTIVE COMMUTE MONITORING
             </span>
-            <h3 style={{ margin: "4px 0", fontSize: "1.1rem" }}>กำลังเดินทาง: {activeTrip.routeTitle}</h3>
+            <h3 style={{ margin: "4px 0", fontSize: "1.1rem" }}>
+              กำลังเดินทาง: {activeTrip.routeTitle}
+            </h3>
             <p style={{ margin: 0, fontSize: "0.9rem" }}>
               {activeTrip.origin} → {activeTrip.destination} · เวลาที่ผ่านไป:{" "}
               <strong>{elapsedMinutes} นาที</strong> (ประเมินไว้ ~{activeTrip.estimatedMinutes} นาที)
@@ -680,8 +693,10 @@ export default function Home() {
                 </span>
               </div>
             </div>
+
             <div style={{ fontSize: "0.78rem", color: "#94a3b8", borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: "8px" }}>
-              📍 {conditions?.weather?.locationName ?? currentLeg.origin.name} <br />
+              📍 {conditions?.weather?.locationName ?? currentLeg.origin.name}
+              <br />
               🚗 {traffic?.label ?? "ตรวจสอบการจราจร"}
               {conditions?.roadDistanceKm != null && (
                 <>
@@ -689,15 +704,30 @@ export default function Home() {
                   📏 ระยะทางถนน ~{conditions.roadDistanceKm} กม.
                 </>
               )}
-              {conditions?.baseDriveMinutes != null && traffic && (
+              {traffic?.source === "live" && conditions?.liveTraffic ? (
                 <>
                   <br />
-                  🚘 OSRM: ขับรถ {conditions.baseDriveMinutes} นาที · คูณรถติดแล้ว ~
-                  {Math.round(conditions.baseDriveMinutes * traffic.multiplier)} นาที
-                  <span style={{ opacity: 0.7 }}> (รถส่วนตัว ไม่ใช่รถเมล์ที่จอดรับส่ง)</span>
+                  🟢 <strong style={{ color: "#34d399" }}>จราจรสด (TomTom)</strong>
+                  <br />
+                  🚘 ขับรถตอนนี้ {conditions.liveTraffic.travelMinutes} นาที · ถนนโล่ง{" "}
+                  {conditions.liveTraffic.freeFlowMinutes} นาที · ตัวคูณ {traffic.multiplier}
+                  <br />
+                  <span style={{ opacity: 0.7 }}>(เวลารถส่วนตัว ไม่ใช่รถเมล์ที่จอดรับส่ง)</span>
+                </>
+              ) : (
+                <>
+                  <br />
+                  🟡 ตัวคูณจราจรเป็นค่าประมาณจากเวลา (ยังไม่มีข้อมูลสด)
+                </>
+              )}
+              {conditions?.weather?.outlookText && (
+                <>
+                  <br />
+                  🌦 <strong style={{ color: "#e2e8f0" }}>{conditions.weather.outlookText}</strong>
                 </>
               )}
             </div>
+
             {conditions?.weather?.rainOutlook && conditions.weather.rainOutlook.length > 0 && (
               <div style={{ marginTop: "8px" }} title="ปริมาณฝนราย 15 นาที ล่วงหน้า 2 ชั่วโมง (ซ้าย = ตอนนี้)">
                 <div style={{ display: "flex", alignItems: "flex-end", gap: "3px", height: "28px" }}>
@@ -813,7 +843,7 @@ export default function Home() {
             <option value="less-walking">ฝนตก / ขี้เกียจเดิน (เน้นเดินน้อย)</option>
           </select>
           <button className="primary-button" onClick={refreshConditions} type="button" disabled={loading}>
-            {loading ? "กำลังอัปเดต..." : "อัปเดตอากาศ"} <span aria-hidden="true">→</span>
+            {loading ? "กำลังอัปเดต..." : "อัปเดตอากาศ/จราจร"} <span aria-hidden="true">→</span>
           </button>
         </div>
 
@@ -944,6 +974,7 @@ export default function Home() {
                         </li>
                       ))}
                     </ol>
+
                     <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap", paddingTop: "10px", borderTop: "1px dashed rgba(255,255,255,0.12)" }}>
                       <span style={{ fontSize: "0.85rem" }}>ลืมกดจับเวลา? บันทึกเวลาจริงย้อนหลัง:</span>
                       <input
@@ -1026,8 +1057,8 @@ export default function Home() {
       <section className="search-panel" style={{ marginTop: "28px" }}>
         <div className="section-heading">
           <div>
-            <p className="eyebrow">COMMUTE OBSERVABILITY & SRE METRICS</p>
-            <h2>สถิติเวลาเดินทางจริง & SLO</h2>
+            <p className="eyebrow">COMMUTE OBSERVABILITY &amp; SRE METRICS</p>
+            <h2>สถิติเวลาเดินทางจริง &amp; SLO</h2>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
             {logs.length > 0 && (
@@ -1035,6 +1066,7 @@ export default function Home() {
                 type="button"
                 onClick={() => {
                   if (confirm(`ล้างประวัติการเดินทางทั้งหมดของโปรไฟล์ "${profile.label}" ใช่หรือไม่ (ลบแล้วกู้ไม่ได้)`)) {
+                    for (const l of logs) store.addTombstone(profile.id, l.id);
                     persistLogs([]);
                   }
                 }}
@@ -1053,7 +1085,7 @@ export default function Home() {
                 🗑 ล้างทั้งหมด
               </button>
             )}
-            <span className="step-label">02 / ประวัติ & SLO</span>
+            <span className="step-label">02 / ประวัติ &amp; SLO</span>
           </div>
         </div>
 
@@ -1074,7 +1106,9 @@ export default function Home() {
               <div className="metric"><span>เวลาเดินทางเฉลี่ยจริง</span><strong>{observabilityStats.avgActual} นาที</strong></div>
               <div className="metric">
                 <span>ความคลาดเคลื่อนเฉลี่ย (Drift)</span>
-                <strong>{observabilityStats.avgDiff > 0 ? `+${observabilityStats.avgDiff}` : observabilityStats.avgDiff} นาที</strong>
+                <strong>
+                  {observabilityStats.avgDiff > 0 ? `+${observabilityStats.avgDiff}` : observabilityStats.avgDiff} นาที
+                </strong>
               </div>
               <div className="metric"><span>จำนวนทริปที่บันทึก</span><strong>{observabilityStats.total} เที่ยว</strong></div>
             </div>
@@ -1170,9 +1204,11 @@ export default function Home() {
 
       <ProfileManager profiles={profiles} profile={profile} onProfilesChanged={reloadProfiles} />
 
+      <SyncPanel profiles={profiles} onSynced={() => reloadProfiles()} />
+
       <footer className="footer">
         <span>CommuteOps <span className="footer-muted">· Personal Transit Observability</span></span>
-        <span>ขับเคลื่อนด้วย Open-Meteo & OSRM (Free Open APIs)</span>
+        <span>Open-Meteo · TomTom · OSRM · OpenStreetMap</span>
       </footer>
     </main>
   );

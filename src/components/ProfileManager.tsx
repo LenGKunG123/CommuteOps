@@ -69,7 +69,10 @@ export default function ProfileManager({ profiles, profile, onProfilesChanged }:
       await navigator.clipboard.writeText(json);
       setMsg({ kind: "ok", lines: ["คัดลอก JSON ไปคลิปบอร์ดแล้ว ส่งให้เพื่อนวางในช่องนำเข้าได้เลย"] });
     } catch {
-      setMsg({ kind: "err", lines: ["คัดลอกอัตโนมัติไม่ได้ (เบราว์เซอร์ไม่อนุญาต) ใช้โหมด JSON ในหน้าแก้ไขแล้วก๊อปเองแทน"] });
+      setMsg({
+        kind: "err",
+        lines: ["คัดลอกอัตโนมัติไม่ได้ (เบราว์เซอร์ไม่อนุญาต) เปิดหน้าแก้ไข → โหมด JSON แล้วก๊อปเองแทน"],
+      });
     }
   }
 
@@ -101,7 +104,7 @@ export default function ProfileManager({ profiles, profile, onProfilesChanged }:
     <section className="search-panel" style={{ marginTop: "28px" }}>
       <div className="section-heading">
         <div>
-          <p className="eyebrow">PROFILES & ROUTES</p>
+          <p className="eyebrow">PROFILES &amp; ROUTES</p>
           <h2>โปรไฟล์และเส้นทาง</h2>
         </div>
         <span className="step-label">04 / โปรไฟล์</span>
@@ -114,14 +117,22 @@ export default function ProfileManager({ profiles, profile, onProfilesChanged }:
         </span>
         <br />
         เส้นทางเช้า {stats.morning} · เย็น {stats.evening} · ค่าโดยสาร {stats.legs} ประเภท
-        {stats.unverified > 0 && <span style={{ color: "#fbbf24" }}> · ยังไม่ยืนยัน {stats.unverified} เส้นทาง</span>}
-        {stats.noFare > 0 && <span style={{ color: "#fbbf24" }}> · ยังไม่กรอกราคา {stats.noFare} ประเภท</span>}
+        {stats.unverified > 0 && (
+          <span style={{ color: "#fbbf24" }}> · ยังไม่ยืนยัน {stats.unverified} เส้นทาง</span>
+        )}
+        {stats.noFare > 0 && (
+          <span style={{ color: "#fbbf24" }}> · ยังไม่กรอกราคา {stats.noFare} ประเภท</span>
+        )}
         <br />
         <span style={{ opacity: 0.7 }}>โปรไฟล์ในเครื่องนี้: {profiles.length} รายการ</span>
       </div>
 
       <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginBottom: "12px" }}>
-        <button type="button" className="primary-button" onClick={() => { setEditing((v) => !v); setMsg(null); }}>
+        <button
+          type="button"
+          className="primary-button"
+          onClick={() => { setEditing((v) => !v); setMsg(null); }}
+        >
           {editing ? "ปิดหน้าแก้ไข" : "✎ แก้เส้นทางและค่าโดยสาร"}
         </button>
         <button type="button" style={btn} onClick={duplicate}>⧉ ทำสำเนา</button>

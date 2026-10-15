@@ -2,6 +2,7 @@
 // ค้นป้ายรถเมล์และสายที่ให้บริการ จาก OpenStreetMap ผ่าน Overpass API (ฟรี ไม่ต้องมี key)
 // ข้อจำกัด: ข้อมูลรถเมล์กรุงเทพฯ ใน OSM ไม่ครบและอาจเก่า ต้องยืนยันกับ ViaBus เสมอ
 import { NextRequest, NextResponse } from "next/server";
+import { clientIp, rateLimit } from "@/lib/routing/rateLimit";
 import type { NearbyRoute, NearbyStop, StopsResponse } from "@/lib/routing/types";
 
 const OVERPASS_URL = "https://overpass-api.de/api/interpreter";
@@ -11,19 +12,21 @@ const clamp = (v: unknown, min: number, max: number): number | null => {
   return Number.isFinite(n) && n >= min && n <= max ? n : null;
 };
 
-// ระยะทางแบบ haversine สำหรับเรียงป้ายตามความใกล้
 function distanceM(aLat: number, aLon: number, bLat: number, bLon: number): number {
   const R = 6371000;
   const dLat = ((bLat - aLat) * Math.PI) / 180;
   const dLon = ((bLon - aLon) * Math.PI) / 180;
   const la1 = (aLat * Math.PI) / 180;
   const la2 = (bLat * Math.PI) / 180;
-  const h =
-    Math.sin(dLat / 2) ** 2 + Math.cos(la1) * Math.cos(la2) * Math.sin(dLon / 2) ** 2;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(la1) * Math.cos(la2) * Math.sin(dLon / 2) ** 2;
   return Math.round(2 * R * Math.asin(Math.sqrt(h)));
 }
 
 export async function POST(req: NextRequest) {
+  if (!rateLimit(`stops:${clientIp(req)}`, 10, 60_000)) {
+    return NextResponse.json({ error: "เรียกถี่เกินไป รอ 1 นาที" }, { status: 429 });
+  }
+
   try {
     const body = await req.json();
     const lat = clamp(body?.lat, -90, 90);
@@ -97,7 +100,6 @@ export async function POST(req: NextRequest) {
     }
 
     stops.sort((a, b) => a.distanceM - b.distanceM);
-
     const routes = Array.from(routeMap.values()).sort((a, b) =>
       a.ref.localeCompare(b.ref, "th", { numeric: true })
     );

@@ -1,15 +1,18 @@
 // src/lib/routing/fares.ts
+// ชนิดค่าโดยสาร + การคำนวณ ไฟล์นี้ไม่รู้จักโปรไฟล์หรือเส้นทาง
+// หลักการ: ใส่เฉพาะตัวเลขที่มีที่มาชัดเจน ที่ยังไม่มีให้เป็น null แล้วให้ผู้ใช้กรอก
+
 export type FareLegId = string;
 export type FareBadge = "official" | "user" | "unset";
 
 export type FareLegDef = {
   label: string;
   short: string;
-  defaultBaht: number | null;  // null = ไม่มีแหล่งอ้างอิง ให้ผู้ใช้กรอก ห้ามเดาใส่
+  defaultBaht: number | null;   // null = ไม่มีแหล่งอ้างอิง ห้ามเดาใส่
   badge: FareBadge;
   source: string;
   sourceUrl?: string;
-  monthlyPass?: boolean;       // นับรวมเวลาเทียบกับตั๋วรายเดือน ขสมก.
+  monthlyPass?: boolean;        // นับรวมเวลาเทียบกับตั๋วรายเดือน ขสมก.
 };
 
 export type FareLegMap = Record<FareLegId, FareLegDef>;
@@ -17,16 +20,17 @@ export type FareLegMap = Record<FareLegId, FareLegDef>;
 export const BMTA_SOURCE_URL = "https://www.bmta.co.th/th/services";
 export const BTS_SOURCE_URL = "https://www.bts.co.th/routemap.html";
 
-// ราคาตั๋วรายเดือนรถปรับอากาศบนเว็บ ขสมก. ไม่ระบุวันที่มีผล และยังไม่ยืนยันว่าใช้กับสายทางด่วนได้
+// ราคาตั๋วรายเดือนรถปรับอากาศบนเว็บ ขสมก. ไม่ระบุวันที่มีผล
+// และยังไม่ยืนยันว่าใช้กับสายทางด่วนได้
 export const BMTA_AC_MONTHLY_PASS = 1020;
 
-// ขาที่ใช้ซ้ำได้หลายโปรไฟล์ โปรไฟล์หยิบไปเฉพาะที่ใช้ และทับค่าได้
+// ขาค่าโดยสารที่ใช้ซ้ำได้หลายโปรไฟล์ โปรไฟล์หยิบไปเฉพาะที่ใช้และทับค่าได้
 export const COMMON_FARE_LEGS: FareLegMap = {
   bus21e: {
     short: "21E",
     label: "รถเมล์ 21E (ทางด่วน) ต่อเที่ยว",
     defaultBaht: 22,
-    badge: "user", // ตารางทางการไม่ได้ระบุสาย 21E ตรง ๆ ตัวเลขนี้ผู้ใช้ยืนยันเอง
+    badge: "user",   // ตารางทางการไม่ได้ระบุสาย 21E ตรง ๆ ตัวเลขนี้ผู้ใช้ยืนยันเอง
     source: "ตารางรถปรับอากาศ ขสมก. 12–20 บาทตามระยะ + ทางด่วน 2 บาท · 22 = 20 + 2 (ผู้ใช้ยืนยัน)",
     sourceUrl: BMTA_SOURCE_URL,
     monthlyPass: true,
@@ -42,7 +46,7 @@ export const COMMON_FARE_LEGS: FareLegMap = {
   },
   busPlain: {
     short: "รถเมล์",
-    label: "รถเมล์ธรรมดา/ปรับอากาศ (ไม่ขึ้นทางด่วน) ต่อเที่ยว",
+    label: "รถเมล์ (ไม่ขึ้นทางด่วน) ต่อเที่ยว",
     defaultBaht: null,
     badge: "unset",
     source: "ขึ้นกับประเภทรถและระยะ ยังไม่ยืนยันเลขสายที่ใช้ ให้กรอกที่จ่ายจริง",
@@ -75,8 +79,8 @@ export const COMMON_FARE_LEGS: FareLegMap = {
 export const WIN_LEG_ID: FareLegId = "win";
 
 export type FareSettings = {
-  fares: Record<FareLegId, number>;   // ราคาที่ผู้ใช้กรอกทับ
-  winPlans: Record<string, boolean>;  // เปิด/ปิดวินรายแผน
+  fares: Record<FareLegId, number>;    // ราคาที่ผู้ใช้กรอกทับ
+  winPlans: Record<string, boolean>;   // เปิด/ปิดวินรายแผน
   morningPlan: string;
   eveningPlan: string;
   altEveningPlan: string;
@@ -122,7 +126,7 @@ export function fareText(ids: FareLegId[], legs: FareLegMap, settings: FareSetti
   return knownBaht > 0 ? `${knownBaht} บาท + ${names} (ยังไม่กรอก)` : `ยังไม่กรอก: ${names}`;
 }
 
-// จำนวนวันจันทร์–ศุกร์ในเดือน ยังไม่หักวันหยุดนักขัตฤกษ์ (ไม่มีปฏิทินทางการในแอป)
+// จำนวนวันจันทร์–ศุกร์ในเดือน ยังไม่หักวันหยุดนักขัตฤกษ์ (แอปไม่มีปฏิทินทางการ)
 export function countWeekdays(year: number, month0: number): number {
   const daysInMonth = new Date(year, month0 + 1, 0).getDate();
   let n = 0;

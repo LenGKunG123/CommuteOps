@@ -13,7 +13,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0f172a",
+  themeColor: "#0f172a",   // ต้องตรงกับพื้นหลังใน globals.css
   width: "device-width",
   initialScale: 1,
 };

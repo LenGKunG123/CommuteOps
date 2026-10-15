@@ -1,18 +1,12 @@
 "use client";
-
 // src/components/CostPlanner.tsx
 import { useMemo, useState } from "react";
 import {
-  BMTA_AC_MONTHLY_PASS,
-  BMTA_SOURCE_URL,
-  BTS_SOURCE_URL,
-  countWeekdays,
-  getFare,
-  type FareLegId,
-  type FareLegMap,
-  type FareSettings,
+  BMTA_AC_MONTHLY_PASS, BMTA_SOURCE_URL, BTS_SOURCE_URL,
+  countWeekdays, getFare,
+  type FareLegId, type FareLegMap, type FareSettings,
 } from "@/lib/routing/fares";
-import { planCost, planFareLegs, plansOf, type CommuteProfile } from "@/lib/routing/catalog";
+import { planCost, planFareLegs, plansOf, type CommuteProfile, type PlanDef } from "@/lib/routing/catalog";
 import { bkkMonthOf } from "@/lib/routing/time";
 import type { CommuteLog } from "@/lib/routing/types";
 
@@ -117,7 +111,7 @@ export default function CostPlanner({ profile, settings, onChange, logs }: Props
           ) / 10
         : 0;
 
-    // เทียบตั๋วรายเดือน: นับทุกขาที่ติดธง monthlyPass ไม่ผูกกับเลขสายใดสายหนึ่ง
+    // ตั๋วรายเดือน: นับทุกขาที่ติดธง monthlyPass ไม่ผูกกับเลขสายใดสายหนึ่ง
     const passLegs = legOrder.filter((id) => legs[id]?.monthlyPass && (tally[id] ?? 0) > 0);
     let bmtaSpend = 0;
     let bmtaTrips = 0;
@@ -132,12 +126,11 @@ export default function CostPlanner({ profile, settings, onChange, logs }: Props
     const bmtaAvgFare = bmtaTrips > 0 && bmtaSpend > 0 ? bmtaSpend / bmtaTrips : null;
 
     return {
-      weekdays, effDays, altDays, extra, days, total, unknown, rows, perDay, tally,
+      weekdays, effDays, altDays, extra, days, total, unknown, rows, perDay,
       passLegs, bmtaSpend, bmtaTrips, bmtaUnknown, bmtaAvgFare,
     };
   }, [settings, year, month0, profile, legs, legOrder]);
 
-  // ค่าโดยสารจากทริปที่บันทึกไว้จริงในเดือนที่เลือก
   const logged = useMemo(() => {
     const inMonth = logs.filter((l) => bkkMonthOf(l.endedAtIso) === monthValue);
     let total = 0;
@@ -153,13 +146,16 @@ export default function CostPlanner({ profile, settings, onChange, logs }: Props
     return { trips: inMonth.length, counted, total, unknownTrips };
   }, [logs, monthValue, settings, profile, plans]);
 
-  const comparison = (list: typeof plans) =>
+  const comparison = (list: PlanDef[]) =>
     list.map((p) => {
       const c = planCost(p.id, profile, settings);
       return { plan: p, perTrip: c.knownBaht, unknown: c.unknown, month: c.knownBaht * calc.days };
     });
 
-  const monthLabel = new Date(year, month0, 1).toLocaleDateString("th-TH", { month: "long", year: "numeric" });
+  const monthLabel = new Date(year, month0, 1).toLocaleDateString("th-TH", {
+    month: "long",
+    year: "numeric",
+  });
 
   return (
     <section className="search-panel" style={{ marginTop: "28px" }}>
@@ -195,8 +191,7 @@ export default function CostPlanner({ profile, settings, onChange, logs }: Props
         <label style={{ ...box, fontSize: "0.82rem", color: "#94a3b8" }}>
           วันธรรมดาที่ไม่ได้เดินทาง (นักขัตฤกษ์ / ลา / WFH)
           <input
-            type="number"
-            min={0}
+            type="number" min={0}
             value={settings.offDays}
             onChange={(e) => set({ offDays: num(e.target.value, 31) })}
             style={{ ...inputStyle, display: "block", width: "100%", marginTop: "6px" }}
@@ -208,8 +203,7 @@ export default function CostPlanner({ profile, settings, onChange, logs }: Props
         <label style={{ ...box, fontSize: "0.82rem", color: "#94a3b8" }}>
           วันพิเศษที่ต้องเดินทางเพิ่ม (นับเป็นไป-กลับ)
           <input
-            type="number"
-            min={0}
+            type="number" min={0}
             value={settings.extraRoundTrips}
             onChange={(e) => set({ extraRoundTrips: num(e.target.value, 62) })}
             style={{ ...inputStyle, display: "block", width: "100%", marginTop: "6px" }}
@@ -229,9 +223,7 @@ export default function CostPlanner({ profile, settings, onChange, logs }: Props
             onChange={(e) => set({ morningPlan: e.target.value })}
             style={{ ...inputStyle, display: "block", width: "100%", marginTop: "6px" }}
           >
-            {morningPlans.map((p) => (
-              <option key={p.id} value={p.id}>{p.title}</option>
-            ))}
+            {morningPlans.map((p) => (<option key={p.id} value={p.id}>{p.title}</option>))}
           </select>
         </label>
         <label style={{ ...box, fontSize: "0.82rem", color: "#94a3b8" }}>
@@ -241,9 +233,7 @@ export default function CostPlanner({ profile, settings, onChange, logs }: Props
             onChange={(e) => set({ eveningPlan: e.target.value })}
             style={{ ...inputStyle, display: "block", width: "100%", marginTop: "6px" }}
           >
-            {eveningPlans.map((p) => (
-              <option key={p.id} value={p.id}>{p.title}</option>
-            ))}
+            {eveningPlans.map((p) => (<option key={p.id} value={p.id}>{p.title}</option>))}
           </select>
         </label>
         <label style={{ ...box, fontSize: "0.82rem", color: "#94a3b8" }}>
@@ -253,15 +243,12 @@ export default function CostPlanner({ profile, settings, onChange, logs }: Props
             onChange={(e) => set({ altEveningPlan: e.target.value })}
             style={{ ...inputStyle, display: "block", width: "100%", marginTop: "6px" }}
           >
-            {eveningPlans.map((p) => (
-              <option key={p.id} value={p.id}>{p.title}</option>
-            ))}
+            {eveningPlans.map((p) => (<option key={p.id} value={p.id}>{p.title}</option>))}
           </select>
           <span style={{ display: "block", marginTop: "8px" }}>
             ใช้กี่วันในเดือนนี้{" "}
             <input
-              type="number"
-              min={0}
+              type="number" min={0}
               value={settings.altEveningDays}
               onChange={(e) => set({ altEveningDays: num(e.target.value, 31) })}
               style={{ ...inputStyle, width: "70px" }}
@@ -283,12 +270,12 @@ export default function CostPlanner({ profile, settings, onChange, logs }: Props
 
       {calc.unknown.length > 0 && (
         <p style={{ fontSize: "0.85rem", color: "#fbbf24", margin: "0 0 14px 0", lineHeight: 1.5 }}>
-          ⚠ ยอดนี้ยังไม่รวม: {calc.unknown.map((id) => legs[id]?.label ?? id).join(", ")} เพราะยังไม่มีราคา
-          กรอกในตารางค่าโดยสารด้านล่างแล้วยอดจะอัปเดตเอง
+          ⚠ ยอดนี้ยังไม่รวม: {calc.unknown.map((id) => legs[id]?.label ?? id).join(", ")}{" "}
+          เพราะยังไม่มีราคา กรอกในตารางค่าโดยสารด้านล่างแล้วยอดจะอัปเดตเอง
         </p>
       )}
 
-      {/* 4) แยกตามประเภทค่าโดยสาร */}
+      {/* 4) แยกตามประเภท */}
       <div style={{ ...box, marginBottom: "18px" }}>
         <strong style={{ display: "block", marginBottom: "8px", fontSize: "0.9rem" }}>แยกตามประเภท</strong>
         {calc.rows.length === 0 ? (
@@ -337,7 +324,6 @@ export default function CostPlanner({ profile, settings, onChange, logs }: Props
           เทียบเฉพาะค่าโดยสาร ไม่รวมเวลาและความแน่น ดูสถิติจริงในส่วน SLO ประกอบ
         </small>
       </div>
-
       {/* 6) ตั๋วรายเดือน ขสมก. */}
       {calc.passLegs.length > 0 && (
         <div style={{ ...box, marginBottom: "18px", fontSize: "0.85rem", lineHeight: 1.6 }}>
@@ -345,7 +331,9 @@ export default function CostPlanner({ profile, settings, onChange, logs }: Props
           ตั๋วรายเดือนรถปรับอากาศบนเว็บ ขสมก. ราคา {BMTA_AC_MONTHLY_PASS.toLocaleString("th-TH")} บาท ·
           ค่ารถเมล์ ({calc.passLegs.map((id) => legs[id]?.short ?? id).join(", ")}) เดือนนี้{" "}
           <strong>{calc.bmtaSpend.toLocaleString("th-TH")} บาท</strong> จาก {calc.bmtaTrips} เที่ยว
-          {calc.bmtaUnknown && <span style={{ color: "#fbbf24" }}> (ยังไม่รวมขาที่ไม่ได้กรอกราคา)</span>}
+          {calc.bmtaUnknown && (
+            <span style={{ color: "#fbbf24" }}> (ยังไม่รวมขาที่ไม่ได้กรอกราคา)</span>
+          )}
           {calc.bmtaAvgFare != null &&
             ` · ถึงจุดคุ้มเมื่อขึ้นประมาณ ${Math.ceil(BMTA_AC_MONTHLY_PASS / calc.bmtaAvgFare)} เที่ยว/เดือน (คิดจากค่าเฉลี่ยที่กรอกไว้)`}
           <br />
@@ -366,22 +354,29 @@ export default function CostPlanner({ profile, settings, onChange, logs }: Props
             {logged.counted} เที่ยว · ค่าโดยสารรวมประมาณ{" "}
             <strong>{logged.total.toLocaleString("th-TH")} บาท</strong>
             {logged.unknownTrips > 0 && (
-              <span style={{ color: "#fbbf24" }}> (มี {logged.unknownTrips} เที่ยวที่ยังไม่รวมค่าที่ไม่ทราบราคา)</span>
+              <span style={{ color: "#fbbf24" }}>
+                {" "}(มี {logged.unknownTrips} เที่ยวที่ยังไม่รวมค่าที่ไม่ทราบราคา)
+              </span>
             )}
             {logged.trips !== logged.counted && (
-              <span style={{ opacity: 0.7 }}> · ข้าม {logged.trips - logged.counted} เที่ยวที่เส้นทางถูกลบ/เปลี่ยนชื่อไปแล้ว</span>
+              <span style={{ opacity: 0.7 }}>
+                {" "}· ข้าม {logged.trips - logged.counted} เที่ยวที่เส้นทางถูกลบหรือเปลี่ยนรหัสไปแล้ว
+              </span>
             )}
             <br />
-            <span style={{ opacity: 0.7 }}>คิดจากแผนที่กดจับเวลา × ค่าโดยสารที่ตั้งไว้ ไม่ใช่ยอดที่จ่ายจริง</span>
+            <span style={{ opacity: 0.7 }}>
+              คิดจากแผนที่กดจับเวลา × ค่าโดยสารที่ตั้งไว้ ไม่ใช่ยอดที่จ่ายจริง
+            </span>
           </>
         )}
       </div>
 
       {/* 8) ตารางค่าโดยสาร (แก้ได้) */}
-      <div style={{ ...box }}>
+      <div style={box}>
         <strong style={{ display: "block", marginBottom: "8px", fontSize: "0.9rem" }}>
           ตารางค่าโดยสาร (แก้เป็นราคาจริงที่จ่ายได้)
         </strong>
+
         <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
           {legOrder.map((id) => {
             const leg = legs[id];
@@ -473,3 +468,5 @@ export default function CostPlanner({ profile, settings, onChange, logs }: Props
     </section>
   );
 }
+
+

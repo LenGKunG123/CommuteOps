@@ -1,12 +1,12 @@
 "use client";
 // src/components/ProfileEditor.tsx
-// แก้โปรไฟล์ด้วยฟอร์ม ไม่ต้องเขียน JSON (ยังมีโหมด JSON ไว้สำหรับคนที่อยากแก้เร็ว)
+// แก้โปรไฟล์ด้วยฟอร์ม ไม่ต้องเขียน JSON (ยังมีโหมด JSON ไว้สำหรับแก้เร็ว)
 import { useState } from "react";
 import {
   legOf, validateProfile,
   type CommuteProfile, type CommuteType, type Leg, type RouteTemplate,
 } from "@/lib/routing/catalog";
-import type { FareLegDef } from "@/lib/routing/fares";
+import type { FareBadge, FareLegDef } from "@/lib/routing/fares";
 import StopFinder from "./StopFinder";
 
 type Props = {
@@ -68,10 +68,14 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
+function clone<T>(v: T): T {
+  return JSON.parse(JSON.stringify(v)) as T;
+}
+
 const emptyLeg = (): Leg => ({ text: "", mode: "WALK", minutes: 5 });
 
 const emptyRoute = (n: number): RouteTemplate => ({
-  id: `route-${Date.now().toString(36)}`,
+  id: `route-${Date.now().toString(36)}-${Math.floor(Math.random() * 1000)}`,
   title: `เส้นทางใหม่ ${n}`,
   mode: "",
   description: "",
@@ -89,8 +93,18 @@ const emptyFareLeg = (): FareLegDef => ({
   source: "ยังไม่ระบุแหล่งที่มา",
 });
 
+function move<T>(arr: T[], i: number, dir: -1 | 1): void {
+  const j = i + dir;
+  if (j < 0 || j >= arr.length) return;
+  const a = arr[i];
+  const b = arr[j];
+  if (a === undefined || b === undefined) return;
+  arr[i] = b;
+  arr[j] = a;
+}
+
 export default function ProfileEditor({ profile, onSave, onClose }: Props) {
-  const [draft, setDraft] = useState<CommuteProfile>(() => structuredClone(profile));
+  const [draft, setDraft] = useState<CommuteProfile>(() => clone(profile));
   const [tab, setTab] = useState<CommuteType>("morning");
   const [openRoute, setOpenRoute] = useState<number | null>(0);
   const [showJson, setShowJson] = useState(false);
@@ -100,7 +114,7 @@ export default function ProfileEditor({ profile, onSave, onClose }: Props) {
   // แก้ draft แบบ immutable ด้วยการ clone ทั้งก้อน อ่านง่ายกว่าเขียน lens
   const edit = (fn: (d: CommuteProfile) => void) => {
     setDraft((prev) => {
-      const next = structuredClone(prev);
+      const next = clone(prev);
       fn(next);
       return next;
     });
@@ -121,16 +135,6 @@ export default function ProfileEditor({ profile, onSave, onClose }: Props) {
       const l = legOf(d, tab).routes[ri]?.legs[li];
       if (l) Object.assign(l, patch);
     });
-
-  const move = <T,>(arr: T[], i: number, dir: -1 | 1) => {
-    const j = i + dir;
-    if (j < 0 || j >= arr.length) return;
-    const a = arr[i];
-    const b = arr[j];
-    if (a === undefined || b === undefined) return;
-    arr[i] = b;
-    arr[j] = a;
-  };
 
   const baseMinutes = (r: RouteTemplate) => r.legs.reduce((s, l) => s + l.minutes, 0);
 
@@ -238,6 +242,7 @@ export default function ProfileEditor({ profile, onSave, onClose }: Props) {
         <strong style={{ fontSize: "0.88rem", display: "block", marginBottom: "8px" }}>
           ต้นทาง → ปลายทาง
         </strong>
+
         {(["origin", "destination"] as const).map((which) => {
           const place = which === "origin" ? leg.origin : leg.destination;
           return (
@@ -250,7 +255,7 @@ export default function ProfileEditor({ profile, onSave, onClose }: Props) {
                     style={{ ...input, width: "100%" }}
                   />
                 </Field>
-                <Field label="ละติจูด">
+                <Field label="ละติจูด (lat)">
                   <input
                     type="number" step="0.00001"
                     value={place.lat}
@@ -258,7 +263,7 @@ export default function ProfileEditor({ profile, onSave, onClose }: Props) {
                     style={{ ...input, width: "100%" }}
                   />
                 </Field>
-                <Field label="ลองจิจูด">
+                <Field label="ลองจิจูด (lon)">
                   <input
                     type="number" step="0.00001"
                     value={place.lon}
@@ -316,13 +321,15 @@ export default function ProfileEditor({ profile, onSave, onClose }: Props) {
                     · {r.legs.length} ขา · ฐาน {baseMinutes(r)} นาที
                   </span>
                 </button>
-                <button type="button" style={btn} onClick={() => edit((d) => move(legOf(d, tab).routes, ri, -1))} aria-label="เลื่อนขึ้น">↑</button>
-                <button type="button" style={btn} onClick={() => edit((d) => move(legOf(d, tab).routes, ri, 1))} aria-label="เลื่อนลง">↓</button>
+                <button type="button" style={btn} aria-label="เลื่อนขึ้น"
+                  onClick={() => edit((d) => move(legOf(d, tab).routes, ri, -1))}>↑</button>
+                <button type="button" style={btn} aria-label="เลื่อนลง"
+                  onClick={() => edit((d) => move(legOf(d, tab).routes, ri, 1))}>↓</button>
                 <button
                   type="button"
                   style={btnDanger}
                   onClick={() => {
-                    if (!confirm(`ลบเส้นทาง "${r.title}" ออกจากโปรไฟล์ (log เก่าของเส้นทางนี้จะยังอยู่แต่ไม่ถูกคิดค่าโดยสาร)`)) return;
+                    if (!confirm(`ลบเส้นทาง "${r.title}" ออกจากโปรไฟล์ (log เก่ายังอยู่ แต่จะไม่ถูกคิดค่าโดยสาร)`)) return;
                     edit((d) => { legOf(d, tab).routes.splice(ri, 1); });
                     setOpenRoute(null);
                   }}
@@ -335,10 +342,12 @@ export default function ProfileEditor({ profile, onSave, onClose }: Props) {
                 <div style={{ marginTop: "12px" }}>
                   <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginBottom: "10px" }}>
                     <Field label="ชื่อเส้นทาง">
-                      <input value={r.title} onChange={(e) => editRoute(ri, { title: e.target.value })} style={{ ...input, width: "100%" }} />
+                      <input value={r.title} onChange={(e) => editRoute(ri, { title: e.target.value })}
+                        style={{ ...input, width: "100%" }} />
                     </Field>
                     <Field label="ประเภท (เช่น รถเมล์ทางด่วน + BTS)">
-                      <input value={r.mode} onChange={(e) => editRoute(ri, { mode: e.target.value })} style={{ ...input, width: "100%" }} />
+                      <input value={r.mode} onChange={(e) => editRoute(ri, { mode: e.target.value })}
+                        style={{ ...input, width: "100%" }} />
                     </Field>
                   </div>
 
@@ -354,7 +363,8 @@ export default function ProfileEditor({ profile, onSave, onClose }: Props) {
 
                   <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginBottom: "10px" }}>
                     <Field label="ป้ายกำกับสั้น (เช่น ต่อเดียว)">
-                      <input value={r.tag ?? ""} onChange={(e) => editRoute(ri, { tag: e.target.value })} style={{ ...input, width: "100%" }} />
+                      <input value={r.tag ?? ""} onChange={(e) => editRoute(ri, { tag: e.target.value })}
+                        style={{ ...input, width: "100%" }} />
                     </Field>
                     <Field label="จำนวนครั้งที่ต่อรถ">
                       <input
@@ -366,7 +376,6 @@ export default function ProfileEditor({ profile, onSave, onClose }: Props) {
                     </Field>
                   </div>
 
-                  {/* ค่าโดยสารที่ใช้ */}
                   <div style={{ marginBottom: "12px" }}>
                     <span style={labelStyle}>ค่าโดยสารที่ต้องจ่ายในเส้นทางนี้ (ติ๊กได้หลายอย่าง)</span>
                     <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
@@ -397,7 +406,6 @@ export default function ProfileEditor({ profile, onSave, onClose }: Props) {
                     </div>
                   </div>
 
-                  {/* ขั้นตอน */}
                   <span style={labelStyle}>ขั้นตอนการเดินทาง ({r.legs.length} ขา)</span>
                   <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                     {r.legs.map((l, li) => (
@@ -407,7 +415,9 @@ export default function ProfileEditor({ profile, onSave, onClose }: Props) {
                           padding: "10px",
                           borderRadius: "10px",
                           background: "rgba(255,255,255,0.04)",
-                          border: l.unverified ? "1px solid rgba(245,158,11,0.4)" : "1px solid rgba(255,255,255,0.1)",
+                          border: l.unverified
+                            ? "1px solid rgba(245,158,11,0.4)"
+                            : "1px solid rgba(255,255,255,0.1)",
                         }}
                       >
                         <div style={{ display: "flex", gap: "6px", alignItems: "center", marginBottom: "8px" }}>
@@ -418,16 +428,12 @@ export default function ProfileEditor({ profile, onSave, onClose }: Props) {
                             placeholder="เช่น รอสาย 21E ที่ป้ายหน้า {origin}"
                             style={{ ...input, flex: 1, minWidth: 0 }}
                           />
-                          <button type="button" style={btn} onClick={() => edit((d) => { const rr = legOf(d, tab).routes[ri]; if (rr) move(rr.legs, li, -1); })} aria-label="เลื่อนขึ้น">↑</button>
-                          <button type="button" style={btn} onClick={() => edit((d) => { const rr = legOf(d, tab).routes[ri]; if (rr) move(rr.legs, li, 1); })} aria-label="เลื่อนลง">↓</button>
-                          <button
-                            type="button"
-                            style={btnDanger}
-                            onClick={() => edit((d) => { legOf(d, tab).routes[ri]?.legs.splice(li, 1); })}
-                            aria-label="ลบขานี้"
-                          >
-                            ✕
-                          </button>
+                          <button type="button" style={btn} aria-label="เลื่อนขึ้น"
+                            onClick={() => edit((d) => { const rr = legOf(d, tab).routes[ri]; if (rr) move(rr.legs, li, -1); })}>↑</button>
+                          <button type="button" style={btn} aria-label="เลื่อนลง"
+                            onClick={() => edit((d) => { const rr = legOf(d, tab).routes[ri]; if (rr) move(rr.legs, li, 1); })}>↓</button>
+                          <button type="button" style={btnDanger} aria-label="ลบขานี้"
+                            onClick={() => edit((d) => { legOf(d, tab).routes[ri]?.legs.splice(li, 1); })}>✕</button>
                         </div>
 
                         <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "flex-end" }}>
@@ -461,27 +467,18 @@ export default function ProfileEditor({ profile, onSave, onClose }: Props) {
 
                         <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", marginTop: "8px", fontSize: "0.8rem" }}>
                           <label style={{ display: "flex", gap: "5px", alignItems: "center", cursor: "pointer" }}>
-                            <input
-                              type="checkbox"
-                              checked={Boolean(l.wait)}
-                              onChange={(e) => editLegRow(ri, li, { wait: e.target.checked })}
-                            />
+                            <input type="checkbox" checked={Boolean(l.wait)}
+                              onChange={(e) => editLegRow(ri, li, { wait: e.target.checked })} />
                             ขานี้คือรอรถ
                           </label>
                           <label style={{ display: "flex", gap: "5px", alignItems: "center", cursor: "pointer" }}>
-                            <input
-                              type="checkbox"
-                              checked={Boolean(l.traffic)}
-                              onChange={(e) => editLegRow(ri, li, { traffic: e.target.checked })}
-                            />
+                            <input type="checkbox" checked={Boolean(l.traffic)}
+                              onChange={(e) => editLegRow(ri, li, { traffic: e.target.checked })} />
                             วิ่งบนถนน (เจอรถติด)
                           </label>
                           <label style={{ display: "flex", gap: "5px", alignItems: "center", cursor: "pointer" }}>
-                            <input
-                              type="checkbox"
-                              checked={Boolean(l.unverified)}
-                              onChange={(e) => editLegRow(ri, li, { unverified: e.target.checked })}
-                            />
+                            <input type="checkbox" checked={Boolean(l.unverified)}
+                              onChange={(e) => editLegRow(ri, li, { unverified: e.target.checked })} />
                             ยังไม่ยืนยัน
                           </label>
                         </div>
@@ -524,6 +521,7 @@ export default function ProfileEditor({ profile, onSave, onClose }: Props) {
         <p style={{ fontSize: "0.78rem", opacity: 0.65, margin: "0 0 10px 0", lineHeight: 1.5 }}>
           เว้นราคาว่างไว้ถ้ายังไม่รู้ ระบบจะแสดงว่า &quot;ยังไม่กรอก&quot; แทนที่จะเดาตัวเลขให้
         </p>
+
         {Object.entries(draft.fareLegs).map(([id, def]) => (
           <div key={id} style={{ marginBottom: "10px", paddingBottom: "10px", borderBottom: "1px dashed rgba(255,255,255,0.1)" }}>
             <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
@@ -563,7 +561,7 @@ export default function ProfileEditor({ profile, onSave, onClose }: Props) {
                   onChange={(e) =>
                     edit((d) => {
                       const f = d.fareLegs[id];
-                      if (f) f.badge = e.target.value as FareLegDef["badge"];
+                      if (f) f.badge = e.target.value as FareBadge;
                     })
                   }
                   style={{ ...input, width: "100%" }}
@@ -574,7 +572,8 @@ export default function ProfileEditor({ profile, onSave, onClose }: Props) {
                 </select>
               </Field>
             </div>
-            <div style={{ display: "flex", gap: "8px", alignItems: "flex-end", marginTop: "8px" }}>
+
+            <div style={{ display: "flex", gap: "8px", alignItems: "flex-end", marginTop: "8px", flexWrap: "wrap" }}>
               <Field label="อธิบายที่มา">
                 <input
                   value={def.source}
@@ -594,9 +593,10 @@ export default function ProfileEditor({ profile, onSave, onClose }: Props) {
                 type="button"
                 style={{ ...btnDanger, marginBottom: "6px" }}
                 onClick={() => {
-                  const used = [...draft.morning.routes, ...draft.evening.routes].filter((r) => r.fareLegs.includes(id));
+                  const used = [...draft.morning.routes, ...draft.evening.routes]
+                    .filter((r) => r.fareLegs.includes(id));
                   if (used.length > 0) {
-                    alert(`ลบไม่ได้ ยังมี ${used.length} เส้นทางใช้ค่าโดยสารนี้อยู่ (${used.map((r) => r.title).join(", ")})`);
+                    alert(`ลบไม่ได้ ยังมี ${used.length} เส้นทางใช้อยู่ (${used.map((r) => r.title).join(", ")})`);
                     return;
                   }
                   edit((d) => { delete d.fareLegs[id]; });
@@ -607,16 +607,20 @@ export default function ProfileEditor({ profile, onSave, onClose }: Props) {
             </div>
           </div>
         ))}
+
         <button
           type="button"
           style={btn}
-          onClick={() => edit((d) => { d.fareLegs[`fare-${Date.now().toString(36)}`] = emptyFareLeg(); })}
+          onClick={() =>
+            edit((d) => {
+              d.fareLegs[`fare-${Date.now().toString(36)}`] = emptyFareLeg();
+            })
+          }
         >
           ＋ เพิ่มประเภทค่าโดยสาร
         </button>
       </div>
 
-      {/* ===== ข้อผิดพลาด ===== */}
       {errors.length > 0 && (
         <div
           style={{
@@ -637,7 +641,6 @@ export default function ProfileEditor({ profile, onSave, onClose }: Props) {
         </div>
       )}
 
-      {/* ===== ปุ่มล่าง ===== */}
       <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
         <button type="button" className="primary-button" onClick={save}>บันทึกโปรไฟล์</button>
         <button type="button" style={btn} onClick={onClose}>ยกเลิก</button>
