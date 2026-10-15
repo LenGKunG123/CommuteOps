@@ -491,3 +491,20 @@ button, input, select {
   color: #38bdf8;
 }
 .footer-muted { opacity: 0.6 !important; }
+
+/* ===== แก้กล่อง/ช่องกรอกล้นขอบ ===== */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+input:not([type="checkbox"]):not([type="radio"]),
+select,
+textarea {
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* ลูกของ grid ที่เขียนด้วย inline style ต้องยอมหดได้ ไม่งั้นช่องกรอกดันคอลัมน์จนทับกัน */
+[style*="grid"] > * {
+  min-width: 0;
+}
